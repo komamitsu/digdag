@@ -17,6 +17,12 @@ class TDClientFactory
             throw new ConfigException("Parameter 'apikey' is empty");
         }
 
+        return clientFromConfig(params, apikey);
+    }
+
+    static TDClient clientFromConfig(Config params, String apikey)
+    {
+
         TDClientBuilder builder = TDClient.newBuilder(false);
 
         Config proxyConfig = params.getNestedOrGetEmpty("proxy");

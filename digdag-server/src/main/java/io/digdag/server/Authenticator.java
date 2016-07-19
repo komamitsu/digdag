@@ -9,6 +9,8 @@ import org.immutables.value.Value;
 import javax.annotation.Nullable;
 import javax.ws.rs.container.ContainerRequestContext;
 
+import java.util.Map;
+
 import static org.immutables.value.Value.Style.ImplementationVisibility.PACKAGE;
 
 public interface Authenticator
@@ -57,6 +59,19 @@ public interface Authenticator
         String getErrorMessage();
 
         Optional<Config> getUserInfo();
+
+        Optional<Map<String, String>> getSecrets();
+
+        static Builder builder() {
+            return ImmutableResult.builder();
+        }
+
+        interface Builder {
+            Builder siteId(int siteId);
+            Builder userInfo(Config userInfo);
+            Builder secrets(Map<String, String> secrets);
+            Result build();
+        }
     }
 
     Result authenticate(ContainerRequestContext requestContext);

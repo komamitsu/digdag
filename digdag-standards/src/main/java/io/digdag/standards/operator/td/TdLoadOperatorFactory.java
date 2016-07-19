@@ -3,6 +3,7 @@ package io.digdag.standards.operator.td;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Optional;
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import com.treasuredata.client.TDClient;
 import com.treasuredata.client.model.TDBulkLoadSessionStartResult;
@@ -14,6 +15,8 @@ import io.digdag.client.config.ConfigElement;
 import io.digdag.client.config.ConfigException;
 import io.digdag.spi.Operator;
 import io.digdag.spi.OperatorFactory;
+import io.digdag.spi.SecretNotFoundException;
+import io.digdag.spi.TaskExecutionContext;
 import io.digdag.spi.TaskExecutionException;
 import io.digdag.spi.TaskRequest;
 import io.digdag.spi.TaskResult;
@@ -25,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -125,13 +129,23 @@ public class TdLoadOperatorFactory
         }
 
         @Override
-        public TaskResult runTask()
+        public List<String> secretSelectors()
+        {
+            return ImmutableList.of("td.apikey");
+        }
+
+        @Override
+        public TaskResult runTask(TaskExecutionContext ctx)
         {
             // TODO: TDOperator requires database to be configured but the database param is not necessary when using a connector session
 
             // TODO: A lot of code is duplicated from TDOperatorFactory. Refactor shared logic into reusable components.
 
-            try (TDOperator op = TDOperator.fromConfig(params)) {
+            // TODO: remove support for getting td apikey from params
+            String apikey = ctx.secrets().getSecretOptional("td.apikey")
+                    .or(() -> params.get("apikey", String.class).trim());
+
+            try (TDOperator op = TDOperator.fromConfig(params, apikey)) {
 
                 // Generate and store domain key before starting the job
                 if (!existingDomainKey.isPresent()) {

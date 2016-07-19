@@ -2,8 +2,13 @@ package io.digdag.standards.operator.td;
 
 import java.util.List;
 import java.nio.file.Path;
+
+import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import com.google.common.collect.Iterables;
+import io.digdag.client.config.ConfigException;
+import io.digdag.spi.SecretNotFoundException;
+import io.digdag.spi.TaskExecutionContext;
 import io.digdag.spi.TaskRequest;
 import io.digdag.spi.TaskResult;
 import io.digdag.spi.Operator;
@@ -12,9 +17,6 @@ import io.digdag.util.BaseOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.digdag.client.config.Config;
-import io.digdag.client.config.ConfigException;
-import com.treasuredata.client.model.TDJobRequest;
-import com.treasuredata.client.model.TDJobRequestBuilder;
 
 public class TdDdlOperatorFactory
         implements OperatorFactory
@@ -45,16 +47,26 @@ public class TdDdlOperatorFactory
         }
 
         @Override
-        public TaskResult runTask()
+        public List<String> secretSelectors()
+        {
+            return ImmutableList.of("td.apikey");
+        }
+
+        @Override
+        public TaskResult runTask(TaskExecutionContext ctx)
         {
             Config params = request.getConfig().mergeDefault(
                     request.getConfig().getNestedOrGetEmpty("td"));
+
+            // TODO: remove support for getting td apikey from params
+            String apikey = ctx.secrets().getSecretOptional("td.apikey")
+                    .or(() -> params.get("apikey", String.class).trim());
 
             List<String> dropDatabaseList = params.getListOrEmpty("drop_databases", String.class);
             List<String> createDatabaseList = params.getListOrEmpty("create_databases", String.class);
             List<String> emptyDatabaseList = params.getListOrEmpty("empty_databases", String.class);
 
-            try (TDOperator op = TDOperator.fromConfig(params)) {
+            try (TDOperator op = TDOperator.fromConfig(params, apikey)) {
                 for (String d : Iterables.concat(dropDatabaseList, emptyDatabaseList)) {
                     logger.info("Deleting TD database {}.{}", d);
                     op.withDatabase(d).ensureDatabaseDeleted(d);
@@ -69,7 +81,7 @@ public class TdDdlOperatorFactory
             List<TableParam> createTableList = params.getListOrEmpty("create_tables", TableParam.class);
             List<TableParam> emptyTableList = params.getListOrEmpty("empty_tables", TableParam.class);
 
-            try (TDOperator op = TDOperator.fromConfig(params)) {
+            try (TDOperator op = TDOperator.fromConfig(params, apikey)) {
                 for (TableParam t : Iterables.concat(dropTableList, emptyTableList)) {
                     logger.info("Deleting TD table {}.{}", op.getDatabase(), t);
                     op.withDatabase(t.getDatabase().or(op.getDatabase())).ensureTableDeleted(t.getTable());

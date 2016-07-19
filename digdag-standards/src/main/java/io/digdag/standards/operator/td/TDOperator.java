@@ -34,6 +34,18 @@ public class TDOperator
         return new TDOperator(client, database);
     }
 
+    public static TDOperator fromConfig(Config config, String apikey)
+    {
+        String database = config.get("database", String.class).trim();
+        if (database.isEmpty()) {
+            throw new ConfigException("Parameter 'database' is empty");
+        }
+
+        TDClient client = TDClientFactory.clientFromConfig(config, apikey);
+
+        return new TDOperator(client, database);
+    }
+
     static final RetryExecutor defaultRetryExecutor = retryExecutor()
         .retryIf((exception) -> !isDeterministicClientException(exception));
 

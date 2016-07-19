@@ -1,6 +1,7 @@
 package io.digdag.standards.operator.td;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
 import com.google.inject.Inject;
 import com.treasuredata.client.model.TDJob;
 import com.treasuredata.client.model.TDJobRequest;
@@ -10,18 +11,19 @@ import io.digdag.client.config.ConfigElement;
 import io.digdag.client.config.ConfigException;
 import io.digdag.spi.Operator;
 import io.digdag.spi.OperatorFactory;
+import io.digdag.spi.TaskExecutionContext;
 import io.digdag.spi.TaskExecutionException;
 import io.digdag.spi.TaskRequest;
 import io.digdag.spi.TaskResult;
 import io.digdag.spi.TemplateEngine;
 import io.digdag.util.BaseOperator;
-import org.msgpack.core.MessageTypeCastException;
 import org.msgpack.value.ArrayValue;
 import org.msgpack.value.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import static com.treasuredata.client.model.TDJob.Status.SUCCESS;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -85,9 +87,19 @@ public class TdWaitOperatorFactory
         }
 
         @Override
-        public TaskResult runTask()
+        public List<String> secretSelectors()
         {
-            try (TDOperator op = TDOperator.fromConfig(params)) {
+            return ImmutableList.of("td.apikey");
+        }
+
+        @Override
+        public TaskResult runTask(TaskExecutionContext ctx)
+        {
+            // TODO: remove support for getting td apikey from params
+            String apikey = ctx.secrets().getSecretOptional("td.apikey")
+                    .or(() -> params.get("apikey", String.class).trim());
+
+            try (TDOperator op = TDOperator.fromConfig(params, apikey)) {
 
                 // Start the query job
                 if (!existingJobId.isPresent()) {

@@ -1,23 +1,28 @@
 package io.digdag.standards.operator.td;
 
-import java.util.Date;
-import java.time.Instant;
-import java.nio.file.Path;
-
-import com.google.inject.Inject;
 import com.google.common.base.Optional;
-import io.digdag.spi.TaskRequest;
-import io.digdag.spi.TaskResult;
+import com.google.common.collect.ImmutableList;
+import com.google.inject.Inject;
+import com.treasuredata.client.model.TDJobSummary;
+import io.digdag.client.config.Config;
+import io.digdag.client.config.ConfigException;
 import io.digdag.spi.Operator;
 import io.digdag.spi.OperatorFactory;
+import io.digdag.spi.SecretNotFoundException;
+import io.digdag.spi.TaskExecutionContext;
+import io.digdag.spi.TaskRequest;
+import io.digdag.spi.TaskResult;
 import io.digdag.util.BaseOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import io.digdag.client.config.Config;
-import com.treasuredata.client.model.TDJobSummary;
 
-import static io.digdag.standards.operator.td.TdOperatorFactory.downloadJobResult;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Date;
+import java.util.List;
+
 import static io.digdag.standards.operator.td.TdOperatorFactory.buildStoreParams;
+import static io.digdag.standards.operator.td.TdOperatorFactory.downloadJobResult;
 
 public class TdRunOperatorFactory
         implements OperatorFactory
@@ -48,10 +53,20 @@ public class TdRunOperatorFactory
         }
 
         @Override
-        public TaskResult runTask()
+        public List<String> secretSelectors()
+        {
+            return ImmutableList.of("td.apikey");
+        }
+
+        @Override
+        public TaskResult runTask(TaskExecutionContext ctx)
         {
             Config params = request.getConfig().mergeDefault(
                     request.getConfig().getNestedOrGetEmpty("td"));
+
+            // TODO: remove support for getting td apikey from params
+            String apikey = ctx.secrets().getSecretOptional("td.apikey")
+                    .or(() -> params.get("apikey", String.class).trim());
 
             String name = params.get("_command", String.class);
             Instant sessionTime = params.get("session_time", Instant.class);
@@ -59,7 +74,7 @@ public class TdRunOperatorFactory
             boolean storeLastResults = params.get("store_last_results", boolean.class, false);
             boolean preview = params.get("preview", boolean.class, false);
 
-            try (TDOperator op = TDOperator.fromConfig(params)) {
+            try (TDOperator op = TDOperator.fromConfig(params, apikey)) {
                 TDJobOperator j = op.startSavedQuery(name, Date.from(sessionTime));
                 logger.info("Started a saved query name={} with time={}", name, sessionTime);
 
@@ -78,8 +93,8 @@ public class TdRunOperatorFactory
                 Config storeParams = buildStoreParams(request.getConfig().getFactory(), j, summary, storeLastResults);
 
                 return TaskResult.defaultBuilder(request)
-                    .storeParams(storeParams)
-                    .build();
+                        .storeParams(storeParams)
+                        .build();
             }
         }
     }
